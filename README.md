@@ -1,6 +1,8 @@
-# 🎮 Fabric Escape Room
+# Fabric Escape Room v2
 
-Build escape room games on **Microsoft Fabric** using **GitHub Copilot**. Give Copilot a theme, and it creates a fully playable 5-module puzzle game across Fabric services — Warehouse, Eventhouse, Semantic Model, Notebook, Data Agent, and OrgApp.
+Build escape room games on **Microsoft Fabric** using **GitHub Copilot**. Give Copilot a theme, and it creates a fully playable 5-module puzzle game across Fabric services — Lakehouse, Eventhouse, Semantic Model, Notebook, Data Agent, and OrgApp.
+
+V2 is **Lakehouse-first**: it avoids Warehouse SQL/TDS connectivity and does not require outbound TCP port 1433. Copilot deploys and runs an attached Fabric seed notebook that populates Lakehouse Delta tables inside Fabric.
 
 ---
 
@@ -12,7 +14,7 @@ You pick a theme ──→ Copilot builds the Fabric items ──→ You configu
 
 1. **Choose a theme** — haunted mansion, pirate ship, biolab outbreak, bank heist, or anything you invent
 2. **Paste a prompt** into GitHub Copilot with your theme, story, and AI character
-3. **Copilot creates** all the Fabric items (Warehouse, Eventhouse, Semantic Model, Notebook, Data Agent, OrgApp)
+3. **Copilot creates** all the Fabric items (Lakehouse, seed notebook, Eventhouse, Semantic Model, diagnostic Notebook, Data Agent, OrgApp)
 4. **Follow the generated Setup Guide** to build reports, dashboards, and configure the game portal
 5. **Share the OrgApp link** — players open it and start solving puzzles
 
@@ -34,10 +36,11 @@ Every game creates these Fabric items:
 │       │             │            │                          │
 │       ▼             ▼            ▼                          │
 │  ┌─────────┐  ┌──────────┐  ┌─────────┐                   │
-│  │Semantic │  │Eventhouse│  │Warehouse│                    │
-│  │ Model   │  │   (KQL)  │  │  (SQL)  │                    │
+│  │Semantic │  │Eventhouse│  │Lakehouse│                    │
+│  │ Model   │  │   (KQL)  │  │ Delta   │                    │
 │  └────┬────┘  └──────────┘  └────┬────┘                    │
-│       │                          │                          │
+│       │                          ▲                          │
+│       │                    Seed Notebook                     │
 │       └──────────┐  ┌────────────┘                          │
 │                  ▼  ▼                                       │
 │            ┌──────────────┐                                 │
@@ -50,10 +53,10 @@ Every game creates these Fabric items:
 
 | Fabric Item | Purpose |
 |-------------|---------|
-| **Warehouse** | Stores puzzle data — anomaly tables, character data, authorization codes |
+| **Lakehouse** | Stores puzzle data as Delta tables — anomaly tables, character data, authorization codes |
+| **Seed Notebook** | Attached to the Lakehouse; creates and populates game Delta tables via Fabric `RunNotebook` |
 | **Eventhouse** | Stores time-series data — activity logs, sensor readings, sighting records |
-| **Lakehouse** | Storage layer for the Semantic Model |
-| **Semantic Model** | DirectLake model with DAX measures for reports |
+| **Semantic Model** | DirectLake model over Lakehouse Delta tables with DAX measures for reports |
 | **Notebook** | Pre-formatted diagnostic output with one hidden code |
 | **Data Agent** | AI character players chat with to discover clues |
 | **OrgApp** | The game portal — players access everything through this |
@@ -80,7 +83,7 @@ See [CREATION-INSTRUCTIONS.md](CREATION-INSTRUCTIONS.md) for the full step-by-st
 
 **Quick start:**
 
-1. Clone **both** [this repo](https://github.com/ineslantero/fabric-escape-room) and [microsoft/skills-for-fabric](https://github.com/microsoft/skills-for-fabric) as sibling folders. They don't auto-combine — Copilot only sees a repo's `AGENTS.md` when that repo is open in VS Code.
+1. Clone **both** this v2 repo and [microsoft/skills-for-fabric](https://github.com/microsoft/skills-for-fabric) as sibling folders. They don't auto-combine — Copilot only sees a repo's `AGENTS.md` when that repo is open in VS Code.
 2. Open both folders in a VS Code multi-root workspace (File → Open Folder, then File → Add Folder to Workspace).
 3. Open Copilot Chat in **Agent mode**.
 4. Customize the prompt in [CREATION-INSTRUCTIONS.md](CREATION-INSTRUCTIONS.md) with your theme and paste it into the chat.
@@ -96,6 +99,8 @@ See [CREATION-INSTRUCTIONS.md](CREATION-INSTRUCTIONS.md) for the full step-by-st
 - **Power BI Desktop** ([download](https://powerbi.microsoft.com/desktop))
 - **GitHub Copilot** license
 - **VS Code** with GitHub Copilot extension
+- **HTTPS/443 access** to Fabric and Microsoft Entra endpoints. V2 does **not** require outbound TCP 1433, `sqlcmd`, or Warehouse SQL endpoint access.
+- **Tenant settings** that allow Lakehouse, Notebook/Spark jobs, Eventhouse/KQL, semantic model authoring, Data Agent, OrgApp, and sharing/publishing.
 
 ---
 
@@ -126,7 +131,7 @@ See [EXAMPLE-THEMES.md](EXAMPLE-THEMES.md) for full details with story hooks and
 
 ## What Copilot Generates
 
-After you run the prompt, Copilot creates the data and modeling layer of the game (Warehouse, Eventhouse + KQL Database, Lakehouse, Semantic Model, and the Module 4 Notebook) using the [Fabric authoring skills](https://github.com/microsoft/skills-for-fabric). It then generates documentation **split across multiple files** so the team can work in parallel:
+After you run the prompt, Copilot creates the data and modeling layer of the game (Lakehouse, attached seed notebook executed via `RunNotebook`, Eventhouse + KQL Database, Semantic Model, and the Module 4 diagnostic Notebook) using the [Fabric authoring skills](https://github.com/microsoft/skills-for-fabric). It then generates documentation **split across multiple files** so the team can work in parallel:
 
 - **`setup-guide/`** — one file per workstream so different team members can pick up reports, dashboard, Data Agent, and OrgApp independently. Includes a `README.md` index with role assignments and the dependency order.
 - **`PLAY-GUIDE.md`** — Spoiler-free instructions for players (story, hints, code formats)

@@ -12,10 +12,10 @@ Every escape room game produces these Fabric items in the user's workspace.
 
 | Item | Type | Skill to use | Purpose |
 |------|------|--------------|---------|
-| `{GameName}DW` | Warehouse | `sqldw-authoring-cli` | Puzzle data (anomaly tables, auth codes, character data) |
 | `{GameName}EH` | Eventhouse + KQL Database | `eventhouse-authoring-cli` | Time-series/pattern data (radar, timelines, sensor readings) |
-| `{GameName}LH` | Lakehouse | `spark-authoring-cli` | Storage layer for the semantic model |
-| `{GameName}SM` | Semantic Model | `semantic-model-authoring` | DirectLake model over warehouse tables for Power BI reports |
+| `{GameName}LH` | Lakehouse | `spark-authoring-cli` | Delta tables for puzzle data, clue fragments, and authorization codes |
+| `{GameName} Seed Data` | Notebook | `spark-authoring-cli` | Attached Lakehouse seed notebook that creates and populates all Lakehouse Delta tables, then runs via `RunNotebook` |
+| `{GameName}SM` | Semantic Model | `semantic-model-authoring` | DirectLake model over Lakehouse Delta tables for Power BI reports |
 | `{ModuleName} Diagnostic` | Notebook | `spark-authoring-cli` | Pre-formatted diagnostic output containing one hidden code |
 
 **Items the team builds manually in the Fabric portal — you describe them in the Setup Guide, but do NOT attempt to create them via skills or REST APIs:**
@@ -30,6 +30,25 @@ Every escape room game produces these Fabric items in the user's workspace.
 
 There are no authoring skills for Data Agents or OrgApps in `skills-for-fabric` today, and reports/dashboards are built in Power BI Desktop and the Fabric portal. The Setup Guide you generate must give the team everything they need to create those items by hand.
 
+### V2 Lakehouse-First Rule: No Warehouse / No TDS
+
+This v2 blueprint is designed for customer environments where outbound SQL/TDS connectivity on TCP port 1433 can be blocked. Do **not** create a Warehouse, do **not** use `sqldw-authoring-cli`, do **not** use `sqlcmd`, and do **not** call the Warehouse SQL endpoint.
+
+All relational game data that previously lived in a Warehouse must be created as Delta tables in `{GameName}LH` by a Fabric notebook that runs inside Fabric:
+
+1. Use `spark-authoring-cli` to create or find `{GameName}LH`.
+2. Create `{GameName} Seed Data` as a PySpark notebook with default Lakehouse metadata:
+   - `default_lakehouse`
+   - `default_lakehouse_workspace_id`
+   - `default_lakehouse_name`
+3. The seed notebook must create/populate these Lakehouse tables using built-in PySpark or Spark SQL only:
+   - Module 1 fact/anomaly table(s)
+   - Module 3 clue fragment table(s)
+   - Module 5 `AuthModule1`, `AuthModule2`, `AuthModule3`, `AuthModule4`
+4. Upload the notebook definition and execute it with the Fabric Jobs API using `jobType=RunNotebook`.
+5. Poll the job until it reaches `Completed`. If it fails, report the failure and include the Fabric job details in the final handoff.
+6. Build the semantic model in DirectLake mode over the Lakehouse tables, not Warehouse tables.
+
 ---
 
 ## Game Structure
@@ -38,7 +57,7 @@ Every game has exactly **5 modules** following this pattern:
 
 ### Module 1: Data Anomaly (Power BI Report)
 - **Puzzle type:** Find the outlier in a dataset
-- **Fabric items:** Warehouse table + Semantic Model + Report
+- **Fabric items:** Lakehouse table + Semantic Model + Report
 - **Pattern:** A table with 6–10 entities where one has an abnormal reading. Page 1 shows a summary table with the entity name and the average of the key measure (e.g., `CargoSection` + `Avg Weight`), a slicer to filter entities, and a gauge showing the average value. A drillthrough page shows the raw detail rows and the diagnostic code.
 - **Data design:**
   - Main table: `Fact{EntityName}` — 20–30 rows across 6–10 entities
@@ -60,7 +79,7 @@ Every game has exactly **5 modules** following this pattern:
 
 ### Module 3: AI Conversation (Data Agent)
 - **Puzzle type:** Extract information through dialog with an AI character
-- **Fabric items:** Warehouse + Eventhouse tables as data sources + Data Agent
+- **Fabric items:** Lakehouse + Eventhouse tables as data sources + Data Agent
 - **Pattern:** A themed AI character who has fragmented information about a signal/message/clue. Player must ask the right questions. The AI gives hints but never directly reveals the code. The code is discoverable by querying the right table through conversation.
 - **Data design:**
   - Clue table: `{ClueTableName}` — 5–10 rows of fragments/messages
@@ -85,7 +104,7 @@ Every game has exactly **5 modules** following this pattern:
 
 ### Module 5: Final Escape (Power BI Report)
 - **Puzzle type:** Combine all 4 codes to win
-- **Fabric items:** Warehouse tables (4 independent auth tables) + Semantic Model + Report
+- **Fabric items:** Lakehouse Delta tables (4 independent auth tables) + Semantic Model + Report
 - **Pattern:** 4 slicer visuals (one per module), each connected to its own independent table. A DAX measure checks if all 4 correct codes are selected and displays a victory/denied status.
 - **Data design:**
   - 4 independent tables: `AuthModule1`, `AuthModule2`, `AuthModule3`, `AuthModule4`
@@ -100,8 +119,9 @@ Every game has exactly **5 modules** following this pattern:
 
 1. **Authorization codes:** Format `{PREFIX}-{4 digits}`. Each module has a unique prefix matching its theme.
 2. **Decoy codes:** Same format as real codes. 9 decoys per module, randomized.
-3. **Eventhouse data:** Use far-future or themed dates. Ensure timestamps are in the correct column order when using `.ingest inline`.
-4. **Volume:** Enough data to make puzzles non-trivial:
+3. **Lakehouse seed data:** Use PySpark DataFrames or Spark SQL `CREATE TABLE ... USING DELTA` / `saveAsTable`. Use deterministic values so the Answer Key and DAX measures match the generated tables.
+4. **Eventhouse data:** Use far-future or themed dates. Ensure timestamps are in the correct column order when using `.ingest inline`.
+5. **Volume:** Enough data to make puzzles non-trivial:
    - Module 1: 20–30 fact rows across 6–10 entities
    - Module 2: 150–200 activity rows, 50+ assessment windows
    - Module 3: 5–10 clue fragments
@@ -112,7 +132,7 @@ Every game has exactly **5 modules** following this pattern:
 
 ## Semantic Model Design
 
-- Use **DirectLake** mode over the warehouse tables
+- Use **DirectLake** mode over the Lakehouse Delta tables
 - Include all Module 1 fact tables and Module 5 auth tables
 - **Create explicit average measures** for any numeric field used in Module 1 visuals (gauge, table). Do NOT rely on implicit aggregation — always create a named DAX measure. Example:
 
@@ -141,8 +161,19 @@ IF(
 
 After creating the semantic model, verify:
 
-1. **Schema match:** Confirm that every table and column in the semantic model matches the source warehouse tables. If columns were added or renamed in the warehouse after the model was created, the model must be updated to reflect those changes. Mismatched schemas cause blank visuals or errors in reports.
+1. **Schema match:** Confirm that every table and column in the semantic model matches the source Lakehouse Delta tables. If columns were added or renamed in the Lakehouse after the model was created, the model must be updated to reflect those changes. Mismatched schemas cause blank visuals or errors in reports.
 2. **Explicit measures exist:** Confirm that all average/aggregate measures needed by Module 1 visuals (gauge, summary table) are created as named DAX measures in the model — not left as implicit aggregations.
+
+### Lakehouse Seed Notebook Requirements
+
+The `{GameName} Seed Data` notebook must be safe to rerun:
+
+- Use `CREATE OR REPLACE TABLE` in Spark SQL, or overwrite mode with `option("overwriteSchema", "true")`.
+- Use lowercase physical table names when practical, but keep semantic model display names friendly.
+- Do not install external Python packages. Use built-in PySpark, Spark SQL, and standard Python only.
+- Do not call external network endpoints from the notebook.
+- Add a final validation cell that prints row counts for every generated table.
+- Keep all player-facing codes in deterministic variables at the top of the notebook so the Answer Key, Module 5 DAX, and setup guide stay synchronized.
 
 ---
 
@@ -192,6 +223,18 @@ Everyone reads this first. Contains:
 - **Sign-in steps:**
   - Open **Power BI Desktop**. In the top-right click **Sign in** with the workspace account
   - In a browser open `https://app.fabric.microsoft.com` and switch to the workspace
+- **V2 Lakehouse architecture note:**
+  - The game uses Lakehouse Delta tables populated by `{GameName} Seed Data`, not a Warehouse
+  - No local SQL/TDS connection to port 1433 is required
+  - Confirm `{GameName}LH`, `{GameName} Seed Data`, `{GameName}EH`, `{GameName}SM`, and `{ModuleName} Diagnostic` exist before report setup starts
+- **Known limitations and prerequisites:**
+  - Workspace must be on active Fabric capacity with Spark available; paused/unassigned capacity prevents notebook execution
+  - Workspace Contributor or Member is expected to create Lakehouses, notebooks, Eventhouses, semantic models, and run notebook jobs; tenant policy can still block item creation, Data Agent, OrgApp, or sharing
+  - Local machine still needs HTTPS/443 access to Fabric and Microsoft Entra endpoints for REST-based authoring; it does not need outbound TCP 1433
+  - `skills-for-fabric` REST workflows require the local tools used by that repo, typically Azure CLI and JSON tooling; `sqlcmd` is not required for v2
+  - The seed notebook must use built-in PySpark/Spark SQL only; avoid `pip install` or external package dependencies unless the customer confirms environment/package policy
+  - Power BI Desktop and a Power BI Pro-capable account are still required for the manual report work
+  - Data Agent and OrgApp availability can depend on tenant settings, region, licensing, and preview feature enablement
 - **Save the report theme JSON:**
   1. Provide the full theme JSON block
   2. Press **Windows key**, type **Notepad**, open it
@@ -250,7 +293,7 @@ Owner: Data Agent owner. Depends on: nothing — fully independent. Output the *
    - Search for **Data Agent** (may also appear under **AI + machine learning**) → click the tile
    - Name it `{AIName}` → **Create**
 2. **Add data sources:**
-   - **+ Add data source** → Warehouse `{GameName}DW` → **Select all tables** → **Add**
+   - **+ Add data source** → Lakehouse `{GameName}LH` or its SQL analytics endpoint → **Select all game tables** → **Add**
    - **+ Add data source** → KQL Database `{GameName}EH` → **Select all tables** → **Add**
 3. **Set the AI instructions** — paste the full instructions block (provided in this file) into the **Instructions** field. The block must cover:
    1. Character persona — name, backstory, speaking style, atmospheric effects
@@ -258,7 +301,7 @@ Owner: Data Agent owner. Depends on: nothing — fully independent. Output the *
    3. Code protection rules — NEVER reveal codes directly
    4. Progressive hint rules — stronger hints after 5+ / 10+ messages
    5. Game context — brief summary of all 5 modules
-   6. Data awareness — the AI knows about all warehouse and KQL tables
+   6. Data awareness — the AI knows about all Lakehouse and KQL tables
 4. **Publish** at the top right
 5. **Share** at the top right → set access to **People in your organization with the link can use** → **Copy link**
 6. **Hand off the link** to the OrgApp owner (paste it into the team chat or a tracker)
@@ -311,7 +354,7 @@ For players — NO codes, NO direct answers:
 ### `ANSWER-KEY.md` (top-level, game admin only)
 - All 4 codes with discovery method
 - Which entity/window/fragment contains each code
-- Data verification queries
+- Data verification queries for Lakehouse tables, Eventhouse tables, and notebook validation output
 
 ---
 
@@ -354,7 +397,7 @@ If the team finishes early, suggest these optional extensions:
 
 ### Extra Credit 1: Additional Puzzle Module
 - Add a 5th investigation module (e.g., find the saboteur/traitor/mole)
-- New warehouse tables: access logs, schedules, alerts
+- New Lakehouse tables: access logs, schedules, alerts
 - New report with investigation visuals
 - Update the Data Agent to hint at this module
 - Can be standalone (fun extra) or mandatory (5th code required for escape)
