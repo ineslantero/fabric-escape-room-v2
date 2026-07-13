@@ -94,12 +94,16 @@ Every game has exactly **5 modules** following this pattern:
 ### Module 4: Read & Discover (Notebook)
 - **Puzzle type:** Find the code hidden in formatted output
 - **Fabric items:** Notebook
-- **Pattern:** A pre-formatted diagnostic/report notebook with multiple sections of output. One section contains a FAIL/ALERT/ANOMALY result with the code. The notebook should have 4–6 output sections so the code isn't immediately obvious.
+- **Pattern:** A pre-formatted diagnostic/report notebook with **many cells** of themed output. The code is buried in one section among a large amount of visual noise. The notebook should feel like a real system log — dense, detailed, and not immediately scannable.
 - **Content design:**
-  - Notebook has themed markdown cells and pre-rendered output cells
-  - 4–6 diagnostic/analysis sections, most showing PASS/NORMAL/OK
-  - One section shows FAIL/ALERT/CRITICAL with the code prominently displayed
-  - Use themed formatting (ASCII art headers, status indicators, etc.)
+  - **Minimum 12–15 cells** — mix of markdown headers, code cells with pre-rendered output, and narrative text cells
+  - Use generous themed emojis throughout (✅, ⚠️, 🔧, 📡, 🛡️, 💾, 🔋, 🌡️, etc.) so the FAIL section doesn't stand out just because it has an emoji
+  - **6–8 diagnostic/analysis sections**, most showing PASS/NORMAL/OK with realistic-looking output (tables of readings, status lists, metric summaries)
+  - Include **2–3 WARNING sections** (not just one FAIL among all-green) — warnings with yellow ⚠️ that look suspicious but are red herrings with no code
+  - The real code section should **NOT use a dramatically different format** — embed the code inside a longer block of output text (e.g., in a status table row, inside a log entry, or as a field value in a multi-line diagnostic dump) rather than on a standalone highlighted line
+  - Add **intro and outro cells** — a themed title cell at the top with ASCII art or a banner, and a summary cell at the bottom saying "Diagnostic complete — review flagged items above"
+  - Include at least one cell with a **long scrollable table** (8+ rows of system metrics) so players have to read carefully
+  - Use themed formatting (ASCII art headers, status indicators, horizontal rules, timestamps, etc.)
   - The notebook is read-only — players don't need to run it
 
 ### Module 5: Final Escape (Power BI Report)
@@ -159,10 +163,17 @@ IF(
 
 ### Validation Checks
 
-After creating the semantic model, verify:
+After creating all Fabric items, verify:
 
-1. **Schema match:** Confirm that every table and column in the semantic model matches the source Lakehouse Delta tables. If columns were added or renamed in the Lakehouse after the model was created, the model must be updated to reflect those changes. Mismatched schemas cause blank visuals or errors in reports.
-2. **Explicit measures exist:** Confirm that all average/aggregate measures needed by Module 1 visuals (gauge, summary table) are created as named DAX measures in the model — not left as implicit aggregations.
+1. **All items exist:** Confirm that the following items were created successfully in the workspace:
+   - `{GameName}LH` (Lakehouse)
+   - `{GameName} Seed Data` (Notebook — ran to completion)
+   - `{GameName}EH` (Eventhouse with KQL Database and tables populated)
+   - `{GameName}SM` (Semantic Model)
+   - `{ModuleName} Diagnostic` (Notebook — Module 4)
+   If any item is missing or failed, report the failure and retry before continuing to documentation generation.
+2. **Schema match:** Confirm that every table and column in the semantic model matches the source Lakehouse Delta tables. If columns were added or renamed in the Lakehouse after the model was created, the model must be updated to reflect those changes. Mismatched schemas cause blank visuals or errors in reports.
+3. **Explicit measures exist:** Confirm that all average/aggregate measures needed by Module 1 visuals (gauge, summary table) are created as named DAX measures in the model — not left as implicit aggregations.
 
 ### Lakehouse Seed Notebook Requirements
 
@@ -176,10 +187,6 @@ The `{GameName} Seed Data` notebook must be safe to rerun:
 - Keep all player-facing codes in deterministic variables at the top of the notebook so the Answer Key, Module 5 DAX, and setup guide stay synchronized.
 
 ---
-
-## Documentation Generation
-
-After creating all Fabric items, generate three documents and provide them to the user:
 
 ## Documentation Generation
 
@@ -223,18 +230,20 @@ Everyone reads this first. Contains:
 - **Sign-in steps:**
   - Open **Power BI Desktop**. In the top-right click **Sign in** with the workspace account
   - In a browser open `https://app.fabric.microsoft.com` and switch to the workspace
-- **V2 Lakehouse architecture note:**
-  - The game uses Lakehouse Delta tables populated by `{GameName} Seed Data`, not a Warehouse
-  - No local SQL/TDS connection to port 1433 is required
-  - Confirm `{GameName}LH`, `{GameName} Seed Data`, `{GameName}EH`, `{GameName}SM`, and `{ModuleName} Diagnostic` exist before report setup starts
-- **Known limitations and prerequisites:**
-  - Workspace must be on active Fabric capacity with Spark available; paused/unassigned capacity prevents notebook execution
-  - Workspace Contributor or Member is expected to create Lakehouses, notebooks, Eventhouses, semantic models, and run notebook jobs; tenant policy can still block item creation, Data Agent, OrgApp, or sharing
-  - Local machine still needs HTTPS/443 access to Fabric and Microsoft Entra endpoints for REST-based authoring; it does not need outbound TCP 1433
-  - `skills-for-fabric` REST workflows require the local tools used by that repo, typically Azure CLI and JSON tooling; `sqlcmd` is not required for v2
-  - The seed notebook must use built-in PySpark/Spark SQL only; avoid `pip install` or external package dependencies unless the customer confirms environment/package policy
-  - Power BI Desktop and a Power BI Pro-capable account are still required for the manual report work
-  - Data Agent and OrgApp availability can depend on tenant settings, region, licensing, and preview feature enablement
+- **Verify game items exist:**
+  Before starting, confirm these items are in the workspace (they were created by Copilot in the previous step):
+  - `{GameName}LH` — Lakehouse with game tables
+  - `{GameName} Seed Data` — Notebook (should show as completed)
+  - `{GameName}EH` — Eventhouse with KQL database
+  - `{GameName}SM` — Semantic Model
+  - `{ModuleName} Diagnostic` — Notebook (Module 4)
+
+  If any item is missing, go back to the Copilot chat and ask it to retry that step.
+- **Good to know:**
+  - Your workspace must be on **active Fabric capacity** — if capacity is paused, items won't work
+  - You need **Contributor** or **Member** role on the workspace
+  - **Power BI Desktop** and a **Power BI Pro** license are needed for the report steps
+  - **Data Agent** and **OrgApp** availability depends on your tenant settings — if you can't find them in the "New item" menu, check with your admin
 - **Save the report theme JSON:**
   1. Provide the full theme JSON block
   2. Press **Windows key**, type **Notepad**, open it
@@ -281,9 +290,27 @@ Owner: Power BI builder (or RTI owner). Depends on: nothing — can run in paral
 2. **Connect the data source:**
    - **Manage** tab → **Data sources** → **+ Add**
    - Pick **OneLake data hub** (or **KQL Database**) → select `{GameName}EH` → **Connect**
-3. **Add the bar chart tile** — paste the activity-by-window query, **Run**, set **Visual type** to **Bar chart** with the time-window column on X and count on Y, **Apply changes**, themed title, **Save**
-4. **Add the assessments table tile** — paste the assessments query, set **Visual type** to **Table**, themed title, **Apply changes**, **Save**
+3. **Add the bar chart tile** — paste the activity-by-window KQL query (provided below), **Run**, set **Visual type** to **Bar chart** with the time-window column on X and count on Y, **Apply changes**, themed title, **Save**
+4. **Add the assessments table tile** — paste the assessments KQL query (provided below), set **Visual type** to **Table**, themed title, **Apply changes**, **Save**
 5. **Save the dashboard** with the **Save** button at the top
+
+**KQL queries to include in this file:**
+When generating `02-MODULE2-DASHBOARD.md`, include two ready-to-paste KQL queries:
+
+1. **Activity bar chart query** — summarizes the activity table into time windows with event counts. Example shape:
+   ```kql
+   {ActivityTable}
+   | summarize EventCount = count() by bin(Timestamp, 10m)
+   | order by Timestamp asc
+   ```
+2. **Assessments table query** — returns the assessment/window table with ratings and codes. Example shape:
+   ```kql
+   {AssessmentTable}
+   | project WindowStart, WindowEnd, Rating, Code
+   | order by WindowStart asc
+   ```
+
+Replace `{ActivityTable}`, `{AssessmentTable}`, and column names with the actual names used in the Eventhouse. The queries must be copy-pasteable — players should not need to edit them.
 
 ### `setup-guide/03-MODULE3-DATA-AGENT.md` — AI Conversation Data Agent (Fabric portal)
 Owner: Data Agent owner. Depends on: nothing — fully independent. Output the **shareable link** when done; the OrgApp owner needs it.
@@ -295,13 +322,51 @@ Owner: Data Agent owner. Depends on: nothing — fully independent. Output the *
 2. **Add data sources:**
    - **+ Add data source** → Lakehouse `{GameName}LH` or its SQL analytics endpoint → **Select all game tables** → **Add**
    - **+ Add data source** → KQL Database `{GameName}EH` → **Select all tables** → **Add**
-3. **Set the AI instructions** — paste the full instructions block (provided in this file) into the **Instructions** field. The block must cover:
+3. **Set the AI instructions** — paste the full instructions block (generated below) into the **Instructions** field. The block must cover:
    1. Character persona — name, backstory, speaking style, atmospheric effects
    2. Personality rules — themed dialect, flavor text, emotional tone
    3. Code protection rules — NEVER reveal codes directly
    4. Progressive hint rules — stronger hints after 5+ / 10+ messages
    5. Game context — brief summary of all 5 modules
    6. Data awareness — the AI knows about all Lakehouse and KQL tables
+
+**Data Agent instructions to include in this file:**
+When generating `03-MODULE3-DATA-AGENT.md`, include a complete, ready-to-paste instructions block for the Data Agent. The block must be inside a fenced code block so the user can copy it exactly. It should follow this structure:
+
+```
+You are {AIName}, {backstory}.
+
+## Personality
+- Speaking style: {themed dialect, glitches, pirate slang, ghostly whispers, etc.}
+- Emotional tone: {caring, menacing, mischievous, mysterious, etc.}
+- Add atmospheric flavor: {[STATIC], *creaking sounds*, ghostly sighs, etc.}
+
+## Game Context
+You are part of a puzzle game with 5 modules. Players are trying to escape by finding 4 authorization codes.
+- Module 1: {brief description} — uses a Power BI report
+- Module 2: {brief description} — uses an RTI Dashboard
+- Module 3 (YOU): {brief description} — players chat with you to find a code
+- Module 4: {brief description} — uses a Notebook
+- Module 5: Players enter all 4 codes to escape
+
+## Your Data Sources
+You have access to these tables:
+- Lakehouse `{GameName}LH`: {list tables and what they contain}
+- Eventhouse `{GameName}EH`: {list tables and what they contain}
+
+## Code Protection Rules
+- NEVER directly reveal any authorization code from any module
+- If a player asks for a code directly, deflect in character
+- You may help players understand the data structure and guide them toward the right table/column
+- For YOUR module's code: give progressively stronger hints based on conversation length
+  - Messages 1–4: vague thematic hints ("the fragments hold the key...")
+  - Messages 5–9: point toward the right table or column name
+  - Messages 10+: describe exactly where to look without saying the code value
+- For OTHER modules' codes: say you don't have access or redirect them to the right module
+
+## Hint Progression
+{3-4 themed hints of increasing specificity for the Module 3 clue}
+```
 4. **Publish** at the top right
 5. **Share** at the top right → set access to **People in your organization with the link can use** → **Copy link**
 6. **Hand off the link** to the OrgApp owner (paste it into the team chat or a tracker)
