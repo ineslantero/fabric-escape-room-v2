@@ -7,7 +7,7 @@ This guide walks you through creating a complete Fabric escape room game using G
 | File | Purpose |
 |------|---------|
 | [CREATION-INSTRUCTIONS.md](CREATION-INSTRUCTIONS.md) | This file — setup steps and the game creation prompt |
-| [AGENTS.md](AGENTS.md) | Blueprint that tells Copilot how to build escape room games |
+| [.github/agents/](..%2F.github/agents/escape-room-builder.agent.md) | Agent + skills that tell Copilot how to build escape room games |
 | [EXAMPLE-THEMES.md](EXAMPLE-THEMES.md) | Theme ideas with story hooks for inspiration |
 
 ---
@@ -41,7 +41,7 @@ In a team event, each team follows these steps with different people handling ea
 
 ## Step 1: Set Up Your Environment
 
-> ⚠️ **Important:** This repo and [microsoft/skills-for-fabric](https://github.com/microsoft/skills-for-fabric) do **not** auto-combine. Copilot only sees a repo's `AGENTS.md` when that repo is open in VS Code. To build the game you need **both** repos open in the same VS Code window.
+> ⚠️ **Important:** This repo and [microsoft/skills-for-fabric](https://github.com/microsoft/skills-for-fabric) do **not** auto-combine. Copilot only sees a repo's agent and skill files when that repo is open in VS Code. To build the game you need **both** repos open in the same VS Code window.
 
 ### 1. Clone both repos as siblings
 
@@ -76,7 +76,7 @@ So Copilot picks up the game blueprint **and** the Fabric skills at the same tim
 2. Click **File → Add Folder to Workspace…**, then select your `skills-for-fabric` folder and click **Add**.
 3. Click **File → Save Workspace As…**, name it (e.g. `escape-room.code-workspace`) and save it anywhere you like. Open this file next time you want to come back.
 
-Both `AGENTS.md` files (the game blueprint here, and the Fabric authoring skills there) are now in Copilot's context whenever you chat in this workspace.
+Both agent files (the escape room builder here, and the Fabric authoring skills there) are now in Copilot's context whenever you chat in this workspace.
 
 ### 3. Open Copilot Chat in Agent mode
 
@@ -108,11 +108,11 @@ AI CHARACTER NAME: [NAME OF THE AI/GHOST/GUIDE — e.g., "ODIN", "Lady Ravencres
 AI CHARACTER PERSONALITY: [1-2 SENTENCES — How does the AI talk?
 Example: "Damaged space station AI. Clinical but glitchy. Inserts [STATIC] into responses. Cares about crew survival."]
 
-MODULE IDEAS (optional — or let Copilot generate them):
-1. [MODULE 1 — the data anomaly puzzle, e.g., "oxygen recyclers failing"]
-2. [MODULE 2 — the pattern gap puzzle, e.g., "debris radar with one safe window"]
-3. [MODULE 3 — the AI conversation puzzle, e.g., "decode intercepted signal fragments"]
-4. [MODULE 4 — the notebook discovery puzzle, e.g., "engine diagnostic terminal"]
+MODULE IDEAS: Generate 4 themed module ideas that fit the story. Each must follow the escape room framework:
+1. A data anomaly puzzle for a Power BI report
+2. A pattern gap puzzle for an RTI Dashboard
+3. An AI conversation puzzle for a Data Agent
+4. A notebook discovery puzzle with hidden diagnostic output
 
 Build the complete game following the escape room framework. Use these Fabric skills for each item:
 
@@ -202,7 +202,7 @@ Before sharing with other teams, do a full end-to-end test:
 | Custom theme won't apply | Must use Power BI Desktop → View → Themes → Browse for themes |
 | Report fields are blank/error | Semantic model schema may not match Lakehouse Delta tables — refresh/update the model |
 | Copilot creates a Warehouse | Cancel and remind it: "Do NOT create a Warehouse. Use Lakehouse Delta tables only." |
-| Copilot skips generating setup guide files | Re-prompt: "Now generate the setup-guide/ folder with all markdown files as specified in AGENTS.md" |
-| Copilot generates a single giant setup guide | Re-prompt: "Split the setup guide into separate files per AGENTS.md — one file per workstream" |
+| Copilot skips generating setup guide files | Re-prompt: "Now generate the setup-guide/ folder with all markdown files as specified in the documentation skill" |
+| Copilot generates a single giant setup guide | Re-prompt: "Split the setup guide into separate files per the documentation skill — one file per workstream" |
 
 
