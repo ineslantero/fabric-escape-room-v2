@@ -118,5 +118,5 @@ See [EXAMPLE-THEMES.md](EXAMPLE-THEMES.md) for full details with story hooks and
 | File | Purpose |
 |------|---------|
 | [CREATION-INSTRUCTIONS.md](CREATION-INSTRUCTIONS.md) | Full guide — environment setup, prompt template, verification, testing, troubleshooting |
-| [AGENTS.md](AGENTS.md) | Blueprint for Copilot — architecture, data schemas, puzzle patterns, validation checks |
+| [.github/agents/](.github/agents/escape-room-builder.agent.md) | Agent + skills for Copilot — game design, Fabric provisioning, validation, documentation |
 | [EXAMPLE-THEMES.md](EXAMPLE-THEMES.md) | Theme ideas with story hooks and module suggestions |
